@@ -1,5 +1,5 @@
 {
-    "symbols": ["AMXL.MX", "FEMSAUBD.MX", "GFNORTEO.MX", "WALMEX.MX", "CEMEXCPO.MX", "BIMBOA.MX", "KIMBERA.MX", "ALSEA.MX", "GRUMAB.MX"],
+    "symbols": ["AMXL", "FEMSAUBD.MX", "GFNORTEO.MX", "WALMEX.MX", "CEMEXCPO.MX", "BIMBOA.MX", "KIMBERA.MX", "ALSEA.MX", "GRUMAB.MX"],
     "timeframes": ["1d", "1h", "15m"],
     "sources": ["yfinance", "alpha_vantage"],
     "max_historical_days": 365,
@@ -13,7 +13,7 @@
     "retry_delay": 5,
     "concurrent_downloads": 5,
     "symbol_data": {
-      "AMXL.MX": {
+      "AMXL": {
         "name": "América Móvil",
         "sector": "Telecomunicaciones",
         "description": "Proveedor líder de servicios de telecomunicaciones en América Latina"
