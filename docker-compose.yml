@@ -1,0 +1,253 @@
+version: '3.8'
+
+services:
+  # Orquestador de flujos de trabajo
+  n8n:
+    image: n8nio/n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=America/Mexico_City
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=password  # Cambiar en producción
+      - N8N_ENCRYPTION_KEY=your-secret-key-change-me # Cambiar en producción
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_LOG_LEVEL=info
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - trading-network
+    depends_on:
+      - postgres
+
+  # Base de datos
+  postgres:
+    image: postgres:13
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres  # Cambiar en producción
+      - POSTGRES_DB=trading
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - trading-network
+
+  # Servicio de recolección de datos
+  data-collector:
+    build:
+      context: ./services/data-collector
+      dockerfile: Dockerfile
+    container_name: trading-data-collector
+    restart: always
+    volumes:
+      - ./services/data-collector:/app
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=trading
+      - LOG_LEVEL=INFO
+      - ALPHA_VANTAGE_KEY=${ALPHA_VANTAGE_KEY:-}
+    networks:
+      - trading-network
+    depends_on:
+      - postgres
+
+  # Servicio de detección de patrones
+  pattern-detector:
+    build:
+      context: ./services/pattern-detector
+      dockerfile: Dockerfile
+    container_name: trading-pattern-detector
+    restart: always
+    volumes:
+      - ./services/pattern-detector:/app
+      - ./config:/app/config
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=trading
+      - LOG_LEVEL=INFO
+    networks:
+      - trading-network
+    depends_on:
+      - postgres
+      - data-collector
+
+  # Servicio de conexión con Interactive Brokers
+  ibkr-connector:
+    build:
+      context: ./services/ibkr-connector
+      dockerfile: Dockerfile
+    container_name: trading-ibkr-connector
+    restart: always
+    volumes:
+      - ./services/ibkr-connector:/app
+      - ./config:/app/config
+    environment:
+      - IBKR_HOST=${IBKR_HOST:-127.0.0.1}
+      - IBKR_PORT=${IBKR_PORT:-7496}
+      - IBKR_CLIENT_ID=${IBKR_CLIENT_ID:-1}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=trading
+      - LOG_LEVEL=INFO
+    ports:
+      - "8081:8080"
+    networks:
+      - trading-network
+    depends_on:
+      - postgres
+
+  # Servicio de gestión de riesgos
+  risk-manager:
+    build:
+      context: ./services/risk-manager
+      dockerfile: Dockerfile
+    container_name: trading-risk-manager
+    restart: always
+    volumes:
+      - ./services/risk-manager:/app
+      - ./config:/app/config
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=trading
+      - LOG_LEVEL=INFO
+    ports:
+      - "8082:8080"
+    networks:
+      - trading-network
+    depends_on:
+      - postgres
+
+  # Servicio de ejecución de órdenes
+  trade-executor:
+    build:
+      context: ./services/trade-executor
+      dockerfile: Dockerfile
+    container_name: trading-executor
+    restart: always
+    volumes:
+      - ./services/trade-executor:/app
+      - ./config:/app/config
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=trading
+      - IBKR_SERVICE_URL=http://ibkr-connector:8080/api
+      - RISK_SERVICE_URL=http://risk-manager:8080/api
+      - LOG_LEVEL=INFO
+    ports:
+      - "8083:8080"
+    networks:
+      - trading-network
+    depends_on:
+      - postgres
+      - ibkr-connector
+      - risk-manager
+
+  # Servicio de backtesting
+  backtester:
+    build:
+      context: ./services/backtester
+      dockerfile: Dockerfile
+    container_name: trading-backtester
+    volumes:
+      - ./services/backtester:/app
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./backtest-results:/app/results
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=trading
+      - LOG_LEVEL=INFO
+    # Añadir esta línea con los argumentos necesarios
+    command: ["--symbol", "AMXL.MX", "--strategy", "ma_crossover", "--timeframe", "1d"]
+    networks:
+      - trading-network
+    depends_on:
+      - postgres
+
+  # Servicio de monitoreo y dashboard
+  dashboard:
+    build:
+      context: ./services/dashboard
+      dockerfile: Dockerfile
+    container_name: trading-dashboard
+    ports:
+      - "8084:8080"
+    volumes:
+      - ./services/dashboard:/app
+      - ./config:/app/config
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=trading
+      - LOG_LEVEL=INFO
+    networks:
+      - trading-network
+    depends_on:
+      - postgres
+
+  # Servicio de alertas
+  alert-service:
+    build:
+      context: ./services/alert-service
+      dockerfile: Dockerfile
+    container_name: trading-alerts
+    restart: always
+    volumes:
+      - ./services/alert-service:/app
+      - ./config:/app/config
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=trading
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - EMAIL_SMTP_SERVER=${EMAIL_SMTP_SERVER:-smtp.gmail.com}
+      - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-587}
+      - EMAIL_USERNAME=${EMAIL_USERNAME:-}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
+      - IBKR_SERVICE_HOST=ibkr-connector
+      - IBKR_SERVICE_PORT=8080
+      - LOG_LEVEL=INFO
+    networks:
+      - trading-network
+    depends_on:
+      - postgres
+
+networks:
+  trading-network:
+    driver: bridge
+
+volumes:
+  n8n_data:
+  postgres_data:

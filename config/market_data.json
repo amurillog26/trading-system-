@@ -1,0 +1,62 @@
+{
+    "symbols": ["AMXL.MX", "FEMSAUBD.MX", "GFNORTEO.MX", "WALMEX.MX", "CEMEXCPO.MX", "BIMBOA.MX", "KIMBERA.MX", "ALSEA.MX", "GRUMAB.MX"],
+    "timeframes": ["1d", "1h", "15m"],
+    "sources": ["yfinance", "alpha_vantage"],
+    "max_historical_days": 365,
+    "update_interval": {
+      "1d": 86400,
+      "1h": 3600,
+      "15m": 900,
+      "5m": 300
+    },
+    "retry_attempts": 3,
+    "retry_delay": 5,
+    "concurrent_downloads": 5,
+    "symbol_data": {
+      "AMXL.MX": {
+        "name": "América Móvil",
+        "sector": "Telecomunicaciones",
+        "description": "Proveedor líder de servicios de telecomunicaciones en América Latina"
+      },
+      "FEMSAUBD.MX": {
+        "name": "FEMSA",
+        "sector": "Consumo",
+        "description": "Empresa líder en bebidas y retail"
+      },
+      "GFNORTEO.MX": {
+        "name": "Grupo Financiero Banorte",
+        "sector": "Financiero",
+        "description": "Uno de los mayores grupos financieros de México"
+      },
+      "WALMEX.MX": {
+        "name": "Walmart de México",
+        "sector": "Comercio Minorista",
+        "description": "Mayor cadena minorista en México"
+      },
+      "CEMEXCPO.MX": {
+        "name": "CEMEX",
+        "sector": "Materiales",
+        "description": "Productor global de cemento y materiales de construcción"
+      },
+      "BIMBOA.MX": {
+        "name": "Grupo Bimbo",
+        "sector": "Consumo",
+        "description": "Mayor empresa panificadora del mundo"
+      },
+      "KIMBERA.MX": {
+        "name": "Kimberly-Clark de México",
+        "sector": "Consumo",
+        "description": "Empresa líder en productos de higiene personal"
+      },
+      "ALSEA.MX": {
+        "name": "Alsea",
+        "sector": "Consumo",
+        "description": "Operador de restaurantes líder en América Latina"
+      },
+      "GRUMAB.MX": {
+        "name": "Gruma",
+        "sector": "Consumo",
+        "description": "Mayor productor de harina de maíz y tortillas en el mundo"
+      }
+    }
+  }

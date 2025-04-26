@@ -1,0 +1,8 @@
+dask==2023.9.2
+psycopg2-binary==2.9.9
+pandas==2.1.1
+numpy==1.26.0
+ta-lib==0.4.28
+python-dateutil==2.8.2
+distributed==2023.9.2
+pytz==2023.3

@@ -1,0 +1,9 @@
+dask==2023.9.2
+pandas==2.1.1
+numpy==1.26.0
+matplotlib==3.8.0
+seaborn==0.13.0
+python-dateutil==2.8.2
+scipy==1.11.3
+distributed==2023.9.2
+pytz==2023.3

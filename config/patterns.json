@@ -1,0 +1,58 @@
+{
+    "patterns": [
+      "cdl_doji",
+      "cdl_engulfing",
+      "cdl_hammer",
+      "cdl_hanging_man",
+      "cdl_morning_star",
+      "cdl_evening_star",
+      "cdl_shooting_star"
+    ],
+    "symbols": ["AMXL.MX", "FEMSAUBD.MX", "GFNORTEO.MX", "WALMEX.MX", "CEMEXCPO.MX"],
+    "timeframes": ["1d", "1h"],
+    "min_confidence": 0.65,
+    "ma_crossover": {
+      "enabled": true,
+      "fast_period": 9,
+      "slow_period": 21
+    },
+    "rsi": {
+      "enabled": true,
+      "period": 14,
+      "oversold": 30,
+      "overbought": 70
+    },
+    "bollinger": {
+      "enabled": true,
+      "period": 20,
+      "std_dev": 2.0
+    },
+    "macd": {
+      "enabled": true,
+      "fast_period": 12,
+      "slow_period": 26,
+      "signal_period": 9
+    },
+    "confirmation_days": 2,
+    "lookback_periods": 200,
+    "symbol_specific": {
+      "AMXL.MX": {
+        "ma_crossover": {
+          "fast_period": 10,
+          "slow_period": 25
+        }
+      },
+      "FEMSAUBD.MX": {
+        "ma_crossover": {
+          "fast_period": 8,
+          "slow_period": 20
+        }
+      },
+      "WALMEX.MX": {
+        "ma_crossover": {
+          "fast_period": 9,
+          "slow_period": 22
+        }
+      }
+    }
+  }

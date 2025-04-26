@@ -1,0 +1,76 @@
+{
+    "ibkr": {
+      "host": "127.0.0.1",
+      "port": 7496,
+      "client_id": 1,
+      "read_only": false,
+      "reconnect_interval": 60,
+      "max_reconnect_attempts": 10
+    },
+    "api": {
+      "host": "0.0.0.0",
+      "port": 8080
+    },
+    "order_defaults": {
+      "market_order": {
+        "transmit": true,
+        "outsideRth": false,
+        "tif": "GTC"
+      },
+      "limit_order": {
+        "transmit": true,
+        "outsideRth": false,
+        "tif": "GTC"
+      },
+      "stop_order": {
+        "transmit": true,
+        "outsideRth": false,
+        "tif": "GTC"
+      }
+    },
+    "symbols": {
+      "AMXL.MX": {"exchange": "MEXI", "currency": "MXN", "symbol_type": "STK"},
+      "FEMSAUBD.MX": {"exchange": "MEXI", "currency": "MXN", "symbol_type": "STK"},
+      "GFNORTEO.MX": {"exchange": "MEXI", "currency": "MXN", "symbol_type": "STK"},
+      "WALMEX.MX": {"exchange": "MEXI", "currency": "MXN", "symbol_type": "STK"},
+      "CEMEXCPO.MX": {"exchange": "MEXI", "currency": "MXN", "symbol_type": "STK"},
+      "BIMBOA.MX": {"exchange": "MEXI", "currency": "MXN", "symbol_type": "STK"},
+      "KIMBERA.MX": {"exchange": "MEXI", "currency": "MXN", "symbol_type": "STK"},
+      "ALSEA.MX": {"exchange": "MEXI", "currency": "MXN", "symbol_type": "STK"},
+      "GRUMAB.MX": {"exchange": "MEXI", "currency": "MXN", "symbol_type": "STK"}
+    },
+    "trade_execution": {
+      "default_order_type": "LIMIT",
+      "market_slippage": 0.001,
+      "limit_buffer": 0.005,
+      "min_price_increment": 0.01,
+      "min_size_increment": 1,
+      "retry_attempts": 3,
+      "retry_delay": 2
+    },
+    "account": {
+      "account_id": "",
+      "base_currency": "MXN",
+      "margin_requirements": {
+        "initial": 0.3,
+        "maintenance": 0.25
+      },
+      "notification_threshold": {
+        "margin_used": 0.7,
+        "buying_power": 0.2,
+        "daily_pnl": -0.05
+      }
+    },
+    "holidays": [
+      "2025-01-01",
+      "2025-02-03",
+      "2025-03-17",
+      "2025-04-17",
+      "2025-04-18",
+      "2025-05-01",
+      "2025-09-16",
+      "2025-11-17",
+      "2025-12-12",
+      "2025-12-25"
+    ]
+  }

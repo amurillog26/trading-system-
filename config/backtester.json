@@ -1,0 +1,85 @@
+{
+  "system_name": "MexTrade Backtester",
+  "version": "1.0.0",
+  "data_dir": "/app/data",
+  "results_dir": "/app/results",
+  "start_date": "2020-01-01",
+  "end_date": "2023-12-31",
+  "initial_capital": 100000,
+  "commission_rate": 0.0025,
+  "slippage": 0.001,
+  "symbols": ["AMXL.MX", "FEMSAUBD.MX", "GFNORTEO.MX", "WALMEX.MX", "CEMEXCPO.MX"],
+  "timeframes": ["1d", "1h"],
+  "strategies": {
+    "ma_crossover": {
+      "fast_period": 9,
+      "slow_period": 21,
+      "stop_loss_atr": 2.0,
+      "take_profit_atr": 4.0,
+      "atr_period": 14
+    },
+    "rsi_strategy": {
+      "rsi_period": 14,
+      "rsi_oversold": 30,
+      "rsi_overbought": 70,
+      "stop_loss_pct": 0.05,
+      "take_profit_pct": 0.1
+    },
+    "bollinger_bands": {
+      "period": 20,
+      "std_dev": 2.0,
+      "stop_loss_pct": 0.05
+    },
+    "macd": {
+      "fast_period": 12,
+      "slow_period": 26,
+      "signal_period": 9,
+      "stop_loss_atr": 2.0
+    }
+  },
+  "optimization": {
+    "parallel_jobs": 8,
+    "metric": "sharpe_ratio",
+    "parameter_grids": {
+      "ma_crossover": {
+        "fast_period": [5, 8, 9, 10, 12, 15],
+        "slow_period": [20, 21, 25, 30, 35, 40],
+        "stop_loss_atr": [1.5, 2.0, 2.5, 3.0]
+      },
+      "rsi_strategy": {
+        "rsi_period": [9, 14, 21],
+        "rsi_oversold": [20, 25, 30, 35],
+        "rsi_overbought": [65, 70, 75, 80],
+        "stop_loss_pct": [0.03, 0.05, 0.07]
+      },
+      "bollinger_bands": {
+        "period": [15, 20, 25, 30],
+        "std_dev": [1.5, 2.0, 2.5, 3.0],
+        "stop_loss_pct": [0.03, 0.05, 0.07]
+      },
+      "macd": {
+        "fast_period": [8, 10, 12, 15],
+        "slow_period": [20, 26, 30],
+        "signal_period": [7, 9, 11],
+        "stop_loss_atr": [1.5, 2.0, 2.5, 3.0]
+      }
+    }
+  },
+  "market_specific": {
+    "mexico": {
+      "trading_hours": {
+        "start": "08:30",
+        "end": "15:00",
+        "timezone": "America/Mexico_City"
+      },
+      "trading_days": [1, 2, 3, 4, 5],
+      "min_volume": 100000,
+      "max_spread_percent": 1.5
+    }
+  },
+  "report_settings": {
+    "generate_charts": true,
+    "include_trade_list": true,
+    "save_format": ["json", "csv", "html"]
+  }
+}

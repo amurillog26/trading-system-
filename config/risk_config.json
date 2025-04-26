@@ -1,0 +1,111 @@
+{
+    "max_risk_per_trade": 0.02,
+    "max_portfolio_risk": 0.06,
+    "max_correlation": 0.7,
+    "max_drawdown": 0.15,
+    "max_trades_per_day": 3,
+    "position_sizing": {
+      "method": "risk_based",
+      "fixed_amount": 500,
+      "risk_percent": 2.0,
+      "max_capital_percent": 30.0,
+      "atr_multiplier": 2.0
+    },
+    "hedging": {
+      "enabled": false,
+      "instruments": {
+        "MXN.USD": {
+          "weight": 0.5,
+          "direction": "inverse"
+        }
+      }
+    },
+    "sector_limits": {
+      "Telecomunicaciones": 0.25,
+      "Consumo": 0.30,
+      "Financiero": 0.25,
+      "Comercio Minorista": 0.25,
+      "Materiales": 0.20,
+      "Otros": 0.10
+    },
+    "volatility_limits": {
+      "max_atr_percent": 5.0,
+      "min_atr_percent": 0.5
+    },
+    "correlation_rules": {
+      "max_portfolio_correlation": 0.5,
+      "min_instruments": 3,
+      "correlation_window": 90
+    },
+    "stop_loss": {
+      "enabled": true,
+      "atr_multiple": 2.0,
+      "max_percent": 5.0,
+      "trailing_stop": {
+        "enabled": true,
+        "activation_percent": 2.0,
+        "trail_percent": 1.5
+      }
+    },
+    "take_profit": {
+      "enabled": true,
+      "risk_reward_ratio": 2.0,
+      "max_percent": 10.0
+    },
+    "capital_allocation": {
+      "initial_capital": 3000.0,
+      "phase_1": {
+        "max_capital": 500.0,
+        "max_positions": 2,
+        "position_size_percent": 0.01
+      },
+      "phase_2": {
+        "max_capital": 1000.0,
+        "max_positions": 3,
+        "position_size_percent": 0.015
+      },
+      "phase_3": {
+        "max_capital": 2000.0,
+        "max_positions": 4,
+        "position_size_percent": 0.02
+      },
+      "phase_4": {
+        "max_capital": 3000.0,
+        "max_positions": 5,
+        "position_size_percent": 0.02
+      }
+    },
+    "drawdown_rules": {
+      "daily_limit": 3.0,
+      "weekly_limit": 5.0,
+      "monthly_limit": 10.0,
+      "max_consecutive_losses": 5,
+      "actions": {
+        "reduce_size": 5.0,
+        "stop_trading": 10.0,
+        "reset_system": 15.0
+      }
+    },
+    "trading_hours": {
+      "mexico": {
+        "start": "08:30",
+        "end": "15:00",
+        "timezone": "America/Mexico_City",
+        "trading_days": [1, 2, 3, 4, 5]
+      }
+    },
+    "market_conditions": {
+      "bull_market": {
+        "position_size_multiplier": 1.2,
+        "max_positions": 5
+      },
+      "bear_market": {
+        "position_size_multiplier": 0.8,
+        "max_positions": 3
+      },
+      "high_volatility": {
+        "position_size_multiplier": 0.7,
+        "stop_loss_multiplier": 1.5
+      }
+    }
+  }

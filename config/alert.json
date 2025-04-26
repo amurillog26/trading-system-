@@ -1,0 +1,91 @@
+{
+    "check_interval": 60,
+    "alert_thresholds": {
+      "price_change": 1.5,
+      "volume_spike": 2.0,
+      "pattern_confidence": 0.75,
+      "risk_warning": 0.1,
+      "drawdown_warning": 5.0,
+      "drawdown_critical": 10.0,
+      "margin_warning": 70.0,
+      "balance_change": 3.0
+    },
+    "notification": {
+      "telegram": {
+        "token": "",
+        "chat_id": ""
+      },
+      "email": {
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "username": "",
+        "password": "",
+        "recipients": [],
+        "subject_prefix": "[Trading Alert] "
+      },
+      "notification_levels": {
+        "info": ["email", "telegram"],
+        "warning": ["email", "telegram"],
+        "critical": ["email", "telegram"]
+      }
+    },
+    "alert_types": {
+      "price_change": {
+        "level": "info",
+        "template": "🔔 ALERTA DE PRECIO: {{symbol}} ha tenido una {{direction}} de {{change}}% desde {{previous}} hasta {{current}}"
+      },
+      "volume_spike": {
+        "level": "info",
+        "template": "📊 ALERTA DE VOLUMEN: {{symbol}} ha tenido un pico de volumen {{ratio}}x mayor que el promedio reciente. Volumen actual: {{volume}}"
+      },
+      "pattern": {
+        "level": "info",
+        "template": "🔍 PATRÓN DETECTADO: {{pattern_name}} ({{direction}}) en {{symbol}} con confianza {{confidence}}\nPrecio de entrada sugerido: {{entry_price}}\nStop loss: {{stop_loss}}\nObjetivo: {{target_price}}\nR/R: {{risk_reward}}"
+      },
+      "risk": {
+        "level": "warning",
+        "template": "⚠️ ALERTA DE RIESGO: Nivel de riesgo ALTO detectado\nExposición total: ${{exposure}} ({{exposure_pct}}%)\nDrawdown máximo: {{drawdown}}%\nPosiciones abiertas: {{positions}}"
+      },
+      "drawdown": {
+        "level": "warning",
+        "template": "📉 ALERTA DE DRAWDOWN: Se ha detectado un drawdown de {{drawdown_pct}}%\nBalance anterior: ${{previous_balance}}\nBalance actual: ${{current_balance}}\nPérdida: ${{loss}}"
+      },
+      "system": {
+        "level": "critical",
+        "template": "❌ ALERTA DE SISTEMA: {{message}}"
+      },
+      "order_execution": {
+        "level": "info",
+        "template": "🎯 ORDEN EJECUTADA: {{order_type}} {{direction}} para {{symbol}}, {{quantity}} acciones a ${{price}}"
+      },
+      "order_failed": {
+        "level": "warning",
+        "template": "⚠️ ORDEN FALLIDA: {{order_type}} {{direction}} para {{symbol}}, Error: {{error_message}}"
+      },
+      "position_closed": {
+        "level": "info",
+        "template": "🏁 POSICIÓN CERRADA: {{symbol}} - {{direction}}, P&L: {{pnl}} ({{pnl_pct}}%), Duración: {{duration}}"
+      }
+    },
+    "symbols_to_monitor": ["AMXL.MX", "FEMSAUBD.MX", "GFNORTEO.MX", "WALMEX.MX", "CEMEXCPO.MX"],
+    "custom_alerts": [
+      {
+        "name": "América Móvil Soporte",
+        "description": "Alerta cuando AMXL.MX se acerca al nivel de soporte",
+        "symbol": "AMXL.MX",
+        "condition": "price <= 16.50",
+        "message": "América Móvil cerca del soporte en $16.50",
+        "trigger_once": false,
+        "reset_threshold": 17.00
+      },
+      {
+        "name": "WALMEX Resistencia",
+        "description": "Alerta cuando WALMEX.MX alcanza resistencia",
+        "symbol": "WALMEX.MX",
+        "condition": "price >= 80.00",
+        "message": "Walmart México alcanzó resistencia en $80.00",
+        "trigger_once": false,
+        "reset_threshold": 76.00
+      }
+    ]
+  }
