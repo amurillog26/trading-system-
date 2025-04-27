@@ -7,14 +7,18 @@ import psycopg2
 import datetime as dt
 import pandas as pd
 import numpy as np
+import yfinance as yf
 from psycopg2.extras import RealDictCursor
 from typing import Dict, List, Tuple, Optional, Union
 from concurrent.futures import ThreadPoolExecutor
+import requests
+from urllib.parse import urlencode
 
-class PatternDetector:
+
+class MarketDataCollector:
     def __init__(self, config_path: str = None):
         """
-        Inicializa el detector de patrones técnicos
+        Inicializa el recolector de datos de mercado
         
         Args:
             config_path: Ruta al archivo de configuración. Si es None, usa valores por defecto
@@ -29,7 +33,7 @@ class PatternDetector:
         # Conectar con base de datos
         self.db_conn = self._get_db_connection()
         
-        self.logger.info(f"Detector de patrones inicializado con {len(self.config['patterns'])} patrones configurados")
+        self.logger.info(f"Recolector de datos inicializado para {len(self.config['symbols'])} símbolos")
     
     def _setup_logging(self) -> None:
         """Configura el sistema de logging"""
@@ -39,7 +43,7 @@ class PatternDetector:
             level=getattr(logging, log_level),
             format=log_format
         )
-        self.logger = logging.getLogger('pattern_detector')
+        self.logger = logging.getLogger('market_data_collector')
     
     def _load_config(self, config_path: str = None) -> Dict:
         """
@@ -51,8 +55,64 @@ class PatternDetector:
         Returns:
             Dict con la configuración
         """
-        # Configuración por defecto...
-        # (mantener el código existente)
+        # Configuración por defecto
+        default_config = {
+            "symbols": ["AMXL.MX", "FEMSAUBD.MX", "GFNORTEO.MX", "WALMEX.MX", "CEMEXCPO.MX"],
+            "timeframes": ["1d", "1h", "15m"],
+            "sources": ["yfinance", "alpha_vantage"],
+            "max_historical_days": 365,
+            "update_interval": {
+                "1d": 86400,  # Segundos en un día
+                "1h": 3600,   # Segundos en una hora
+                "15m": 900,   # Segundos en 15 minutos
+                "5m": 300     # Segundos en 5 minutos
+            },
+            "retry_attempts": 3,
+            "retry_delay": 5,
+            "concurrent_downloads": 5,
+            "symbol_data": {
+                "AMXL.MX": {
+                    "name": "América Móvil",
+                    "sector": "Telecomunicaciones"
+                },
+                "FEMSAUBD.MX": {
+                    "name": "FEMSA",
+                    "sector": "Consumo"
+                },
+                "GFNORTEO.MX": {
+                    "name": "Grupo Financiero Banorte",
+                    "sector": "Financiero"
+                },
+                "WALMEX.MX": {
+                    "name": "Walmart de México",
+                    "sector": "Comercio Minorista"
+                },
+                "CEMEXCPO.MX": {
+                    "name": "CEMEX",
+                    "sector": "Materiales"
+                }
+            }
+        }
+        
+        # Si no se proporciona ruta, buscar en ubicación estándar
+        if not config_path:
+            config_path = os.path.join(os.environ.get('CONFIG_DIR', '/app/config'), 'market_data.json')
+        
+        # Intentar cargar desde archivo si existe
+        config = default_config.copy()
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    file_config = json.load(f)
+                    # Actualizar configuración con valores del archivo
+                    self._deep_update(config, file_config)
+                    self.logger.info(f"Configuración cargada desde {config_path}")
+            except Exception as e:
+                self.logger.error(f"Error al cargar configuración desde archivo: {str(e)}")
+                self.logger.info("Usando configuración por defecto")
+        else:
+            self.logger.warning(f"Archivo de configuración no encontrado: {config_path}")
+            self.logger.info("Usando configuración por defecto")
         
         return config
     
@@ -64,22 +124,43 @@ class PatternDetector:
             original: Diccionario original a actualizar
             update: Diccionario con nuevos valores
         """
-        # (mantener el código existente)
+        for key, value in update.items():
+            if key in original and isinstance(original[key], dict) and isinstance(value, dict):
+                self._deep_update(original[key], value)
+            else:
+                original[key] = value
     
     def _get_db_connection(self):
         """Establece conexión con la base de datos PostgreSQL"""
-        # (mantener el código existente)
+        try:
+            conn = psycopg2.connect(
+                host=os.environ.get('POSTGRES_HOST', 'postgres'),
+                port=os.environ.get('POSTGRES_PORT', '5432'),
+                database=os.environ.get('POSTGRES_DB', 'trading'),
+                user=os.environ.get('POSTGRES_USER', 'postgres'),
+                password=os.environ.get('POSTGRES_PASSWORD', 'postgres')
+            )
+            self.logger.info("Conexión a base de datos establecida")
+            return conn
+        except Exception as e:
+            self.logger.error(f"Error al conectar a la base de datos: {str(e)}")
+            # Reintentar después de un tiempo
+            time.sleep(5)
+            return self._get_db_connection()
     
-    def detect_patterns(self, symbols: List[str] = None, timeframes: List[str] = None) -> Dict:
+    def collect_data(self, symbols: List[str] = None, timeframes: List[str] = None, 
+                    days: int = None, force_update: bool = False) -> Dict:
         """
-        Detecta patrones técnicos en los símbolos y timeframes especificados
+        Recolecta datos de mercado para los símbolos y timeframes especificados
         
         Args:
-            symbols: Lista de símbolos a analizar. Si es None, usa todos los de la configuración.
-            timeframes: Lista de timeframes a analizar. Si es None, usa todos los de la configuración.
+            symbols: Lista de símbolos a recolectar. Si es None, usa todos los de la configuración.
+            timeframes: Lista de timeframes a recolectar. Si es None, usa todos los de la configuración.
+            days: Número de días a recolectar. Si es None, usa el valor de la configuración.
+            force_update: Si True, fuerza la actualización aunque los datos estén recientes.
             
         Returns:
-            Dict con los resultados de detección de patrones
+            Dict con resultados de la recolección
         """
         if symbols is None:
             symbols = self.config['symbols']
@@ -87,315 +168,415 @@ class PatternDetector:
         if timeframes is None:
             timeframes = self.config['timeframes']
         
-        self.logger.info(f"Detectando patrones para {len(symbols)} símbolos y {len(timeframes)} timeframes")
+        if days is None:
+            days = self.config['max_historical_days']
+        
+        self.logger.info(f"Recolectando datos para {len(symbols)} símbolos y {len(timeframes)} timeframes")
         
         results = {}
-        lookback = self.config['lookback_periods']
         
         # Procesar cada combinación de símbolo y timeframe
-        for symbol in symbols:
-            for timeframe in timeframes:
-                key = f"{symbol}_{timeframe}"
-                
-                try:
-                    # Obtener datos de la base de datos
-                    data = self._get_market_data(symbol, timeframe, lookback)
+        with ThreadPoolExecutor(max_workers=self.config['concurrent_downloads']) as executor:
+            futures = {}
+            
+            for symbol in symbols:
+                for timeframe in timeframes:
+                    key = f"{symbol}_{timeframe}"
                     
-                    if data.empty:
-                        self.logger.warning(f"No hay datos disponibles para {key}")
+                    # Verificar si es necesario actualizar
+                    if not force_update and not self._should_update(symbol, timeframe):
+                        self.logger.info(f"Datos recientes disponibles para {key}, omitiendo actualización")
+                        results[key] = {"status": "skipped", "reason": "recent_data_available"}
                         continue
                     
-                    # Detectar patrones
-                    patterns = self._detect_all_patterns(data, symbol, timeframe)
-                    
-                    # Añadir a resultados
-                    results[key] = patterns
-                    
-                    # Guardar patrones detectados en base de datos
-                    self._save_patterns_to_db(patterns)
-                    
-                    self.logger.info(f"Detectados {len(patterns)} patrones para {key}")
+                    # Ejecutar recolección en paralelo
+                    futures[executor.submit(self._collect_symbol_data, symbol, timeframe, days)] = key
+            
+            # Recopilar resultados
+            for future in futures:
+                key = futures[future]
+                try:
+                    data = future.result()
+                    if data is not None and not data.empty:
+                        # Guardar en base de datos
+                        rows_saved = self._save_to_database(data, key.split('_')[0], key.split('_')[1])
+                        results[key] = {"status": "success", "rows": len(data), "saved": rows_saved}
+                    else:
+                        results[key] = {"status": "error", "reason": "no_data"}
                 except Exception as e:
-                    self.logger.error(f"Error al procesar {key}: {str(e)}")
+                    self.logger.error(f"Error al recolectar datos para {key}: {str(e)}")
+                    results[key] = {"status": "error", "reason": str(e)}
         
         return results
     
-    def _get_market_data(self, symbol: str, timeframe: str, lookback: int) -> pd.DataFrame:
+    def _should_update(self, symbol: str, timeframe: str) -> bool:
         """
-        Obtiene datos de mercado desde la base de datos
+        Determina si es necesario actualizar los datos para un símbolo y timeframe
         
         Args:
-            symbol: Símbolo a consultar
-            timeframe: Timeframe a consultar
-            lookback: Número de periodos a consultar
+            symbol: Símbolo a verificar
+            timeframe: Timeframe a verificar
             
         Returns:
-            DataFrame con los datos de mercado
+            True si se debe actualizar, False en caso contrario
         """
         try:
             cursor = self.db_conn.cursor()
             
-            # Construir consulta SQL
+            # Obtener último registro
             query = """
-            SELECT date, open, high, low, close, volume
-            FROM market_data
-            WHERE symbol = %s AND timeframe = %s
-            ORDER BY date DESC
-            LIMIT %s;
+            SELECT MAX(date) as last_date FROM market_data
+            WHERE symbol = %s AND timeframe = %s;
             """
             
-            cursor.execute(query, (symbol, timeframe, lookback))
-            rows = cursor.fetchall()
+            cursor.execute(query, (symbol, timeframe))
+            result = cursor.fetchone()
             cursor.close()
             
-            if not rows:
-                return pd.DataFrame()  # DataFrame vacío
+            if result[0] is None:
+                # No hay datos, se debe actualizar
+                return True
             
-            # Crear DataFrame
-            data = pd.DataFrame(rows, columns=['date', 'open', 'high', 'low', 'close', 'volume'])
+            last_date = result[0]
+            now = dt.datetime.now()
             
-            # Ordenar por fecha
-            data = data.sort_values('date')
+            # Calcular tiempo transcurrido desde última actualización
+            elapsed = (now - last_date).total_seconds()
             
-            return data
+            # Obtener intervalo de actualización para este timeframe
+            update_interval = self.config['update_interval'].get(timeframe, 86400)  # 1 día por defecto
+            
+            # Determinar si ha pasado suficiente tiempo
+            return elapsed >= update_interval
         except Exception as e:
-            self.logger.error(f"Error al obtener datos de mercado: {str(e)}")
+            self.logger.error(f"Error al verificar actualización para {symbol}_{timeframe}: {str(e)}")
+            # En caso de error, asumir que se debe actualizar
+            return True
+    
+    def _collect_symbol_data(self, symbol: str, timeframe: str, days: int) -> pd.DataFrame:
+        """
+        Recolecta datos para un símbolo y timeframe específicos
+        
+        Args:
+            symbol: Símbolo a recolectar
+            timeframe: Timeframe a recolectar
+            days: Número de días a recolectar
+            
+        Returns:
+            DataFrame con datos recolectados o None si no se pudieron obtener
+        """
+        # Determinar fuentes a utilizar
+        sources = self.config['sources']
+        
+        # Intentar cada fuente en orden
+        for source in sources:
+            try:
+                if source == 'yfinance':
+                    data = self._collect_from_yfinance(symbol, timeframe, days)
+                elif source == 'alpha_vantage':
+                    data = self._collect_from_alpha_vantage(symbol, timeframe, days)
+                else:
+                    self.logger.warning(f"Fuente desconocida: {source}")
+                    continue
+                
+                if data is not None and not data.empty:
+                    self.logger.info(f"Datos recolectados de {source} para {symbol}_{timeframe}: {len(data)} registros")
+                    return data
+            except Exception as e:
+                self.logger.error(f"Error al recolectar datos de {source} para {symbol}_{timeframe}: {str(e)}")
+        
+        # Si no se pudo obtener de ninguna fuente
+        return None
+    
+    def _collect_from_yfinance(self, symbol: str, timeframe: str, days: int) -> pd.DataFrame:
+        """
+        Recolecta datos desde Yahoo Finance
+        
+        Args:
+            symbol: Símbolo a recolectar
+            timeframe: Timeframe a recolectar
+            days: Número de días a recolectar
+            
+        Returns:
+            DataFrame con datos recolectados
+        """
+        # Mapear timeframe al formato de yfinance
+        yf_interval = {
+            '1m': '1m',
+            '5m': '5m',
+            '15m': '15m',
+            '30m': '30m',
+            '1h': '1h',
+            '1d': '1d',
+            '1wk': '1wk',
+            '1mo': '1mo'
+        }
+        
+        interval = yf_interval.get(timeframe, '1d')
+        
+        # Calcular rango de fechas
+        end_date = dt.datetime.now()
+        
+        # Para intervalos intradía, yfinance tiene limitaciones en el historial disponible
+        if interval in ['1m', '5m', '15m', '30m', '1h']:
+            # Para intervalos intradía, el máximo es de 60 días
+            start_date = end_date - dt.timedelta(days=min(days, 60))
+        else:
+            start_date = end_date - dt.timedelta(days=days)
+        
+        # Recolectar datos
+        retry_attempts = self.config.get('retry_attempts', 3)
+        retry_delay = self.config.get('retry_delay', 5)
+        
+        for attempt in range(retry_attempts):
+            try:
+                ticker = yf.Ticker(symbol)
+                data = ticker.history(interval=interval, start=start_date, end=end_date)
+                
+                if data.empty:
+                    self.logger.warning(f"No hay datos disponibles en yfinance para {symbol} con intervalo {interval}")
+                    return pd.DataFrame()
+                
+                # Preparar DataFrame
+                df = data.reset_index()
+                
+                # Renombrar columnas al formato de nuestra base de datos
+                df = df.rename(columns={
+                    'Date': 'date', 
+                    'Datetime': 'date',
+                    'Open': 'open',
+                    'High': 'high',
+                    'Low': 'low',
+                    'Close': 'close',
+                    'Volume': 'volume'
+                })
+                
+                # Seleccionar solo las columnas necesarias
+                df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
+                
+                return df
+            except Exception as e:
+                self.logger.warning(f"Intento {attempt+1}/{retry_attempts} fallido para {symbol}: {str(e)}")
+                if attempt < retry_attempts - 1:
+                    time.sleep(retry_delay)
+        
+        return pd.DataFrame()
+    
+    def _collect_from_alpha_vantage(self, symbol: str, timeframe: str, days: int) -> pd.DataFrame:
+        """
+        Recolecta datos desde Alpha Vantage
+        
+        Args:
+            symbol: Símbolo a recolectar
+            timeframe: Timeframe a recolectar
+            days: Número de días a recolectar
+            
+        Returns:
+            DataFrame con datos recolectados
+        """
+        # Obtener API key
+        api_key = os.environ.get('ALPHA_VANTAGE_KEY', '')
+        
+        if not api_key:
+            self.logger.warning("Alpha Vantage API key no encontrada en variables de entorno")
             return pd.DataFrame()
+        
+        # Mapear timeframe al formato de Alpha Vantage
+        av_interval = {
+            '1m': '1min',
+            '5m': '5min',
+            '15m': '15min',
+            '30m': '30min',
+            '1h': '60min',
+            '1d': 'daily',
+            '1wk': 'weekly',
+            '1mo': 'monthly'
+        }
+        
+        interval = av_interval.get(timeframe, 'daily')
+        
+        # Construir URL
+        base_url = 'https://www.alphavantage.co/query'
+        
+        if interval in ['1min', '5min', '15min', '30min', '60min']:
+            # Datos intradía
+            params = {
+                'function': 'TIME_SERIES_INTRADAY',
+                'symbol': symbol,
+                'interval': interval,
+                'outputsize': 'full',
+                'apikey': api_key
+            }
+        else:
+            # Datos diarios, semanales o mensuales
+            function = {
+                'daily': 'TIME_SERIES_DAILY',
+                'weekly': 'TIME_SERIES_WEEKLY',
+                'monthly': 'TIME_SERIES_MONTHLY'
+            }
+            
+            params = {
+                'function': function[interval],
+                'symbol': symbol,
+                'outputsize': 'full',
+                'apikey': api_key
+            }
+        
+        # Recolectar datos
+        retry_attempts = self.config.get('retry_attempts', 3)
+        retry_delay = self.config.get('retry_delay', 5)
+        
+        for attempt in range(retry_attempts):
+            try:
+                # Realizar solicitud a Alpha Vantage
+                response = requests.get(base_url, params=params)
+                data = response.json()
+                
+                # Verificar si hay errores
+                if 'Error Message' in data:
+                    self.logger.warning(f"Error de Alpha Vantage: {data['Error Message']}")
+                    return pd.DataFrame()
+                
+                # Extraer datos según el intervalo
+                if interval in ['1min', '5min', '15min', '30min', '60min']:
+                    time_series_key = f"Time Series ({interval})"
+                else:
+                    time_series_key = {
+                        'daily': 'Time Series (Daily)',
+                        'weekly': 'Weekly Time Series',
+                        'monthly': 'Monthly Time Series'
+                    }[interval]
+                
+                if time_series_key not in data:
+                    self.logger.warning(f"Datos no encontrados en respuesta de Alpha Vantage para {symbol}")
+                    return pd.DataFrame()
+                
+                # Convertir a DataFrame
+                time_series = data[time_series_key]
+                records = []
+                
+                for date, values in time_series.items():
+                    records.append({
+                        'date': pd.to_datetime(date),
+                        'open': float(values['1. open']),
+                        'high': float(values['2. high']),
+                        'low': float(values['3. low']),
+                        'close': float(values['4. close']),
+                        'volume': int(float(values['5. volume']))
+                    })
+                
+                df = pd.DataFrame(records)
+                
+                # Ordenar por fecha
+                df = df.sort_values('date')
+                
+                # Filtrar por rango de fechas
+                start_date = dt.datetime.now() - dt.timedelta(days=days)
+                df = df[df['date'] >= start_date]
+                
+                return df
+            except Exception as e:
+                self.logger.warning(f"Intento {attempt+1}/{retry_attempts} fallido para {symbol}: {str(e)}")
+                if attempt < retry_attempts - 1:
+                    time.sleep(retry_delay)
+        
+        return pd.DataFrame()
     
-    def _detect_all_patterns(self, data: pd.DataFrame, symbol: str, timeframe: str) -> List[Dict]:
+    def _save_to_database(self, data: pd.DataFrame, symbol: str, timeframe: str) -> int:
         """
-        Detecta todos los patrones configurados en los datos
+        Guarda los datos recolectados en la base de datos
         
         Args:
-            data: DataFrame con datos de mercado
-            symbol: Símbolo analizado
-            timeframe: Timeframe analizado
+            data: DataFrame con datos a guardar
+            symbol: Símbolo de los datos
+            timeframe: Timeframe de los datos
             
         Returns:
-            Lista de patrones detectados
+            Número de filas guardadas
         """
-        # Convertir a pandas para análisis
-        df = data
-        
-        patterns = []
-        
-        # 1. Detectar patrones de velas japonesas
-        candle_patterns = self._detect_candlestick_patterns(df)
-        patterns.extend(candle_patterns)
-        
-        # 2. Detectar cruces de medias móviles
-        if self.config['ma_crossover']['enabled']:
-            ma_patterns = self._detect_ma_crossover(df)
-            patterns.extend(ma_patterns)
-        
-        # 3. Detectar señales de RSI
-        if self.config['rsi']['enabled']:
-            rsi_patterns = self._detect_rsi_signals(df)
-            patterns.extend(rsi_patterns)
-        
-        # 4. Detectar señales de Bandas de Bollinger
-        if self.config['bollinger']['enabled']:
-            bollinger_patterns = self._detect_bollinger_signals(df)
-            patterns.extend(bollinger_patterns)
-        
-        # 5. Detectar señales de MACD
-        if self.config['macd']['enabled']:
-            macd_patterns = self._detect_macd_signals(df)
-            patterns.extend(macd_patterns)
-        
-        # Añadir información común a todos los patrones
-        for pattern in patterns:
-            pattern['symbol'] = symbol
-            pattern['timeframe'] = timeframe
-            pattern['timestamp'] = dt.datetime.now()
-        
-        return patterns
-    
-    def _detect_candlestick_patterns(self, df: pd.DataFrame) -> List[Dict]:
-        """
-        Detecta patrones de velas japonesas
-        
-        Args:
-            df: DataFrame con datos de mercado
+        try:
+            cursor = self.db_conn.cursor()
             
-        Returns:
-            Lista de patrones detectados
-        """
-        # (implementar este método)
-        return []
-    
-    def _detect_ma_crossover(self, df: pd.DataFrame) -> List[Dict]:
-        """
-        Detecta cruces de medias móviles
-        
-        Args:
-            df: DataFrame con datos de mercado
+            # Inicializar contador
+            rows_saved = 0
             
-        Returns:
-            Lista de patrones detectados
-        """
-        # (implementar este método)
-        return []
-    
-    def _detect_rsi_signals(self, df: pd.DataFrame) -> List[Dict]:
-        """
-        Detecta señales basadas en RSI
-        
-        Args:
-            df: DataFrame con datos de mercado
+            # Iterar sobre cada fila y guardar
+            for _, row in data.iterrows():
+                # Verificar si ya existe este registro
+                check_query = """
+                SELECT id FROM market_data
+                WHERE symbol = %s AND timeframe = %s AND date = %s;
+                """
+                
+                cursor.execute(check_query, (symbol, timeframe, row['date']))
+                existing = cursor.fetchone()
+                
+                if existing:
+                    # Actualizar registro existente
+                    update_query = """
+                    UPDATE market_data
+                    SET open = %s, high = %s, low = %s, close = %s, volume = %s
+                    WHERE id = %s;
+                    """
+                    
+                    cursor.execute(update_query, (
+                        float(row['open']), float(row['high']), float(row['low']), 
+                        float(row['close']), int(row['volume']), existing[0]
+                    ))
+                else:
+                    # Insertar nuevo registro
+                    insert_query = """
+                    INSERT INTO market_data
+                    (symbol, timeframe, date, open, high, low, close, volume, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """
+                    
+                    cursor.execute(insert_query, (
+                        symbol, timeframe, row['date'],
+                        float(row['open']), float(row['high']), float(row['low']), 
+                        float(row['close']), int(row['volume']), dt.datetime.now()
+                    ))
+                
+                rows_saved += 1
             
-        Returns:
-            Lista de patrones detectados
-        """
-        # (implementar este método)
-        return []
-    
-    def _detect_bollinger_signals(self, df: pd.DataFrame) -> List[Dict]:
-        """
-        Detecta señales basadas en Bandas de Bollinger
-        
-        Args:
-            df: DataFrame con datos de mercado
+            self.db_conn.commit()
+            cursor.close()
             
-        Returns:
-            Lista de patrones detectados
-        """
-        # (implementar este método)
-        return []
-    
-    def _detect_macd_signals(self, df: pd.DataFrame) -> List[Dict]:
-        """
-        Detecta señales basadas en MACD
-        
-        Args:
-            df: DataFrame con datos de mercado
-            
-        Returns:
-            Lista de patrones detectados
-        """
-        # (implementar este método)
-        return []
-    
-    def _calculate_pattern_confidence(self, df: pd.DataFrame, index: int, 
-                                     bullish: bool, confirmation_days: int) -> float:
-        """
-        Calcula la confianza del patrón
-        
-        Args:
-            df: DataFrame con datos de mercado
-            index: Índice de la señal en el DataFrame
-            bullish: True si es señal alcista, False si es bajista
-            confirmation_days: Días de confirmación a considerar
-            
-        Returns:
-            Valor de confianza entre 0 y 1
-        """
-        # (implementar este método)
-        return 0.5
-    
-    def _calculate_ma_crossover_confidence(self, df: pd.DataFrame, index: int, 
-                                          bullish: bool, confirmation_days: int) -> float:
-        """
-        Calcula la confianza del cruce de medias móviles
-        
-        Args:
-            df: DataFrame con datos de mercado
-            index: Índice de la señal en el DataFrame
-            bullish: True si es señal alcista, False si es bajista
-            confirmation_days: Días de confirmación a considerar
-            
-        Returns:
-            Valor de confianza entre 0 y 1
-        """
-        # (implementar este método)
-        return 0.5
-    
-    def _calculate_rsi_confidence(self, df: pd.DataFrame, index: int, 
-                                 bullish: bool, confirmation_days: int) -> float:
-        """
-        Calcula la confianza de la señal de RSI
-        
-        Args:
-            df: DataFrame con datos de mercado
-            index: Índice de la señal en el DataFrame
-            bullish: True si es señal alcista, False si es bajista
-            confirmation_days: Días de confirmación a considerar
-            
-        Returns:
-            Valor de confianza entre 0 y 1
-        """
-        # (implementar este método)
-        return 0.5
-    
-    def _calculate_bollinger_confidence(self, df: pd.DataFrame, index: int, 
-                                       bullish: bool, confirmation_days: int) -> float:
-        """
-        Calcula la confianza de la señal de Bandas de Bollinger
-        
-        Args:
-            df: DataFrame con datos de mercado
-            index: Índice de la señal en el DataFrame
-            bullish: True si es señal alcista, False si es bajista
-            confirmation_days: Días de confirmación a considerar
-            
-        Returns:
-            Valor de confianza entre 0 y 1
-        """
-        # (implementar este método)
-        return 0.5
-    
-    def _calculate_macd_confidence(self, df: pd.DataFrame, index: int, 
-                                  bullish: bool, confirmation_days: int) -> float:
-        """
-        Calcula la confianza de la señal de MACD
-        
-        Args:
-            df: DataFrame con datos de mercado
-            index: Índice de la señal en el DataFrame
-            bullish: True si es señal alcista, False si es bajista
-            confirmation_days: Días de confirmación a considerar
-            
-        Returns:
-            Valor de confianza entre 0 y 1
-        """
-        # (implementar este método)
-        return 0.5
-    
-    def _save_patterns_to_db(self, patterns: List[Dict]) -> None:
-        """
-        Guarda los patrones detectados en la base de datos
-        
-        Args:
-            patterns: Lista de patrones detectados
-        """
-        # (implementar este método)
-        pass
+            self.logger.info(f"Guardados {rows_saved} registros para {symbol}_{timeframe}")
+            return rows_saved
+        except Exception as e:
+            self.db_conn.rollback()
+            self.logger.error(f"Error al guardar datos en base de datos: {str(e)}")
+            return 0
+
 
 def main():
-    """Función principal para ejecutar el detector de patrones"""
-    parser = argparse.ArgumentParser(description='Detector de patrones técnicos')
+    """Función principal para ejecutar el recolector de datos"""
+    parser = argparse.ArgumentParser(description='Recolector de datos de mercado')
     parser.add_argument('--config', type=str, help='Ruta al archivo de configuración')
     parser.add_argument('--symbols', type=str, help='Lista de símbolos separados por comas')
     parser.add_argument('--timeframes', type=str, help='Lista de timeframes separados por comas')
+    parser.add_argument('--days', type=int, help='Número de días a recolectar')
+    parser.add_argument('--force', action='store_true', help='Forzar actualización aunque haya datos recientes')
     
     args = parser.parse_args()
     
-    # Inicializar detector
-    detector = PatternDetector(args.config)
+    # Inicializar recolector
+    collector = MarketDataCollector(args.config)
     
     # Obtener símbolos y timeframes
     symbols = args.symbols.split(',') if args.symbols else None
     timeframes = args.timeframes.split(',') if args.timeframes else None
     
-    # Detectar patrones
-    results = detector.detect_patterns(symbols, timeframes)
+    # Recolectar datos
+    results = collector.collect_data(symbols, timeframes, args.days, args.force)
     
     # Mostrar resumen
-    total_patterns = sum(len(patterns) for patterns in results.values())
-    print(f"Detectados {total_patterns} patrones en total")
+    success_count = sum(1 for result in results.values() if result.get('status') == 'success')
+    total_rows = sum(result.get('rows', 0) for result in results.values() if result.get('status') == 'success')
     
-    for key, patterns in results.items():
-        print(f"{key}: {len(patterns)} patrones")
+    print(f"Recolección completada: {success_count}/{len(results)} exitosos, {total_rows} registros recolectados")
+
 
 if __name__ == "__main__":
     # Esperar un poco para que otros servicios estén disponibles
